@@ -1,0 +1,16 @@
+# Background features a streaming device rarely uses. Packages a device doesn't have are skipped.
+# Deliberately left out: remote pairing, Bluetooth, contacts and calendar providers (voice search uses them).
+com.android.virtualmachine.res
+com.android.nearby.halfsheet
+com.android.uwb.resources
+com.android.managedprovisioning
+com.android.dynsystem
+com.android.hotspot2.osulogin
+com.android.sharedstoragebackup
+com.android.wallpaperbackup
+com.android.backupconfirm
+com.android.providers.userdictionary
+com.android.settings.intelligence
+com.google.android.syncadapters.calendar
+com.android.healthconnect.controller
+com.android.health.connect.backuprestore

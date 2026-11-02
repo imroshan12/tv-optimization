@@ -1,0 +1,8 @@
+# Asked about one at a time, and left alone with --yes. Add any app you never use.
+com.google.android.youtube.tvmusic  (YouTube Music)
+com.graymatrix.did  (ZEE5)
+com.google.android.play.games  (Google Play Games)
+com.google.android.apps.tv.dreamx  (Google's ambient screensaver; the device then sleeps when idle)
+com.android.dreams.basic  (the basic screensaver)
+com.google.android.tv.axel  (Google TV ambient art; uses about 40 MB)
+com.google.android.katniss  (voice assistant; the remote's mic button stops working)

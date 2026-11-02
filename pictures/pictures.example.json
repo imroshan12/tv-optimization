@@ -1,0 +1,10 @@
+[
+  {
+    "file": "my-netflix-picture.jpg",
+    "package": "com.netflix.ninja",
+    "tagline": "One more episode.",
+    "mirror": false,
+    "shift": 120,
+    "brightness": 0.9
+  }
+]

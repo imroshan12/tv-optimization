@@ -1,0 +1,29 @@
+{
+  "dock_apps": [
+    "com.netflix.ninja",
+    "com.google.android.youtube.tv",
+    "com.amazon.amazonvideo.livingroom",
+    "in.startv.hotstar",
+    "com.sonyliv",
+    "com.apple.atve.androidtv.appletv"
+  ],
+  "columns": 6,
+  "single_row": true,
+  "background_color": "#000000",
+  "wallpaper": true,
+  "wallpaper_rotation_minutes": 60,
+  "wallpaper_captions": true,
+  "sky_intensity": 0,
+  "show_greeting": false,
+  "dock_title": false,
+  "dock_band": false,
+  "ambient_glow": false,
+  "app_glow": true,
+  "glass_style": "glass",
+  "icon_only_buttons": true,
+  "icon_only_inputs": true,
+  "focus_overshoot": false,
+  "advanced_effects": false,
+  "live_tv_package": "",
+  "stock_home_redirect": "@STOCK_HOME@"
+}

@@ -1,0 +1,185 @@
+diff --git a/launcher/app/src/main/java/com/gathin/tvhome/MainActivity.java b/launcher/app/src/main/java/com/gathin/tvhome/MainActivity.java
+index 4e3b8bd..25aea7b 100644
+--- a/launcher/app/src/main/java/com/gathin/tvhome/MainActivity.java
++++ b/launcher/app/src/main/java/com/gathin/tvhome/MainActivity.java
+@@ -1795,6 +1795,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+     public void onTileFocused(int position, View card) {
+         lastFocused = position;
+         lastFocusedKey = adapter.keyAt(position);
++        wallpaperPlayer.showForPackage(adapter.packageAt(position));
+         // Focus restored before the first layout (cold start): the tile has no size yet, and the glass
+         // would be sized to 2*pad. Run again once the tile is laid out.
+         if (card.getWidth() == 0) {
+diff --git a/launcher/app/src/main/java/com/gathin/tvhome/WallpaperPlayer.java b/launcher/app/src/main/java/com/gathin/tvhome/WallpaperPlayer.java
+index 8da8dfa..0b02f5f 100644
+--- a/launcher/app/src/main/java/com/gathin/tvhome/WallpaperPlayer.java
++++ b/launcher/app/src/main/java/com/gathin/tvhome/WallpaperPlayer.java
+@@ -31,6 +31,11 @@ import java.util.concurrent.Executors;
+ 
+ /** Displays and rotates a theme's local wallpaper images while Home is visible. */
+ final class WallpaperPlayer {
++    private static final String ART_PREFIX = "art_";
++    private static final long ART_SETTLE_MS = 130;
++    private static final long ART_FADE_MS = 220;
++    private static final int TAGLINE_BOTTOM_DP = 190;
++
+     private final FrameLayout root;
+     private final ImageView image;
+     private final int backgroundColor;
+@@ -61,6 +66,13 @@ final class WallpaperPlayer {
+     private final String latitude, longitude;
+     private LocalDate sunDay;
+     private int[] sun;
++    /** A collection of art_<package>.jpg: the focused tile picks the picture instead of a rotation. */
++    private final boolean appArt;
++    /** The picture being faded out over the new one; only in the app art mode. */
++    private final ImageView fade;
++    /** The picture focus last asked for; a decode that finishes for any other is dropped. */
++    private String wantedArt = "";
++    private Runnable pendingArt;
+ 
+     WallpaperPlayer(Context context, FrameLayout root, Config config) {
+         this.root = root;
+@@ -90,14 +102,75 @@ final class WallpaperPlayer {
+         image.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+         names = config.wallpaperCaptions && config.wallpaperEnabled && !files.isEmpty()
+                 ? WallpaperCaptions.read(files.get(0).getParentFile()) : Collections.emptyMap();
+-        caption = names.isEmpty() ? null : makeCaption(context, root);
++        boolean art = false;
++        for (File file : files) art |= file.getName().startsWith(ART_PREFIX);
++        appArt = art;
++        caption = names.isEmpty() ? null : makeCaption(context, root, appArt);
++        fade = appArt ? new ImageView(context) : null;
+         if (config.wallpaperEnabled && !files.isEmpty()) {
+             root.addView(image, 0, new FrameLayout.LayoutParams(
+                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
++            if (fade != null) {
++                fade.setScaleType(ImageView.ScaleType.CENTER_CROP);
++                fade.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
++                fade.setVisibility(View.GONE);
++                root.addView(fade, 1, new FrameLayout.LayoutParams(
++                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
++            }
+             showFirst();
+         }
+     }
+ 
++    /**
++     * Focus settled on a tile: show that app's picture. The wait lets a held D-pad run along the row without
++     * decoding every picture it passes, and only the picture on screen and the one fading out stay in memory.
++     */
++    void showForPackage(String packageName) {
++        if (!appArt || closed || packageName == null) return;
++        String name = ART_PREFIX + packageName + ".jpg";
++        if (name.equals(wantedArt) || findFile(name) == null) return;
++        wantedArt = name;
++        if (pendingArt != null) root.removeCallbacks(pendingArt);
++        pendingArt = () -> loadArt(name);
++        root.postDelayed(pendingArt, ART_SETTLE_MS);
++    }
++
++    private File findFile(String name) {
++        for (File file : files) if (file.getName().equals(name)) return file;
++        return null;
++    }
++
++    private void loadArt(String name) {
++        File file = findFile(name);
++        if (file == null || !active || closed || (current != null && name.equals(displayed))) return;
++        decoder.execute(() -> {
++            Bitmap bitmap = decode(file);
++            root.post(() -> {
++                if (closed || !active || bitmap == null || !name.equals(wantedArt)) return;
++                crossfade(bitmap);
++                displayed = name;
++                showCaption(true);
++                preferences.edit().putString("image", name).apply();
++            });
++        });
++    }
++
++    /** Old picture on top, fading out over the new one. Hardware bitmaps go to the GC, never recycled mid-frame. */
++    private void crossfade(Bitmap bitmap) {
++        Bitmap old = current;
++        current = bitmap;
++        root.setBackground(null);
++        fade.animate().cancel();
++        fade.setImageBitmap(old);
++        fade.setAlpha(1f);
++        fade.setVisibility(View.VISIBLE);
++        image.setImageBitmap(bitmap);
++        fade.animate().alpha(0f).setDuration(ART_FADE_MS).withEndAction(() -> {
++            fade.setImageDrawable(null);
++            fade.setVisibility(View.GONE);
++        }).start();
++    }
++
+     /**
+      * The picture Home opens with is decoded right here, on the main thread, as the single wallpaper always was:
+      * Home's first frame already has it instead of drawing the plain colour and the picture popping in later.
+@@ -141,6 +214,11 @@ final class WallpaperPlayer {
+     void releaseForMemoryPressure() {
+         if (current == null) return;
+         image.setImageDrawable(null);
++        if (fade != null) {
++            fade.animate().cancel();
++            fade.setImageDrawable(null);
++            fade.setVisibility(View.GONE);
++        }
+         // The renderer may still have a queued frame that references this hardware bitmap. Drop our references and
+         // let Android reclaim its native buffer after rendering releases it instead of recycling it mid-frame.
+         current = null;
+@@ -166,6 +244,13 @@ final class WallpaperPlayer {
+     }
+ 
+     void update() {
++        if (appArt) {
++            // Back on Home, or the picture was released for memory: bring back the one focus asked for.
++            String art = wantedArt.isEmpty() ? preferences.getString("image", "") : wantedArt;
++            if (wantedArt.isEmpty()) wantedArt = art;
++            if (!art.isEmpty()) loadArt(art);
++            return;
++        }
+         if (!active || closed || loading || files.isEmpty()) return;
+         String previous = preferences.getString("image", "");
+         // A picture outside the time of day's group (the group changed) is replaced at once, not after the interval.
+@@ -207,10 +292,10 @@ final class WallpaperPlayer {
+      * Small light text under the top-right buttons, above everything else and never focusable. It sits where the
+      * top bar ends in every layout, so it does not cover the clock, the stats line or the tiles.
+      */
+-    private static TextView makeCaption(Context context, FrameLayout root) {
++    private static TextView makeCaption(Context context, FrameLayout root, boolean tagline) {
+         float dp = context.getResources().getDisplayMetrics().density;
+         TextView text = new TextView(context);
+-        text.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
++        text.setTextSize(TypedValue.COMPLEX_UNIT_SP, tagline ? 26 : 15);
+         text.setTextColor(0xD9FFFFFF);
+         text.setShadowLayer(6 * dp, 0, dp, 0xCC000000);
+         text.setSingleLine(true);
+@@ -227,6 +312,14 @@ final class WallpaperPlayer {
+                 ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP | Gravity.END);
+         params.topMargin = Math.round(110 * dp);
+         params.setMarginEnd(Math.round(62 * dp));
++        if (tagline) {
++            // Above the row of tiles, on the dark left of the picture.
++            params.gravity = Gravity.BOTTOM | Gravity.START;
++            params.topMargin = 0;
++            params.setMarginEnd(0);
++            params.setMarginStart(Math.round(58 * dp));
++            params.bottomMargin = Math.round(TAGLINE_BOTTOM_DP * dp);
++        }
+         root.addView(text, params);
+         return text;
+     }
+@@ -246,9 +339,9 @@ final class WallpaperPlayer {
+             caption.setAlpha(1f);
+             return;
+         }
+-        caption.animate().alpha(0f).setDuration(250).withEndAction(() -> {
++        caption.animate().alpha(0f).setDuration(appArt ? 90 : 250).withEndAction(() -> {
+             caption.setText(name);
+-            caption.animate().alpha(1f).setDuration(350).start();
++            caption.animate().alpha(1f).setDuration(appArt ? 170 : 350).start();
+         }).start();
+     }
+ 

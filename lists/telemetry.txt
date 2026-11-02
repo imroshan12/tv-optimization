@@ -1,0 +1,9 @@
+# Ads, telemetry, feedback and factory test tools. Packages a device doesn't have are skipped.
+com.android.adservices.api
+com.android.ondevicepersonalization.services
+com.android.federatedcompute.services
+com.google.android.feedback
+com.android.tv.feedbackconsent
+com.google.android.onetimeinitializer
+com.google.android.partnersetup
+com.sdt.producttest

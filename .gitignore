@@ -1,0 +1,17 @@
+# Details of your own device
+backup/
+state/
+shots/
+
+# Generated and downloaded
+build/
+.cache/
+*.apk
+__pycache__/
+
+# Your pictures, which are usually someone else's copyright
+pictures/*
+!pictures/README.md
+!pictures/pictures.example.json
+
+.DS_Store
